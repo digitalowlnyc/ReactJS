@@ -1,0 +1,4 @@
+[
+  {"id": 1, "author": "Ted Hunt", "text": "This is one comment, and it came from the server/file"},
+  {"id": 2, "author": "Jordan Walke", "text": "This is *another* comment, and it also came from the server/file"}
+]

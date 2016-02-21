@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>React Tutorial</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.7/react.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.7/react-dom.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/0.3.5/marked.min.js"></script>
+
+    <!-- Added by BXM -->
+    <script src="othercomponents.js"></script>
+</head>
+<body>
+<div id="content"></div>
+<br><br><hr>
+
+This page starts at "Reactive state" in the Tutorial and completes it<br>
+
+<h1>Notes:</h1>
+<ul>
+    <li>In React, components should always represent the state of the view and not only at the point of initialization.</li>
+    <li>This sync is achieved by adding properties to hold INPUT (or other element) state and attaching onChange handlers to update React view</li>
+    <li>These INPUT elements with a value set are called controlled components.</li>
+</ul>
+
+Reference add by BXM:
+<ul>
+    <li><a href="https://facebook.github.io/react/docs/tutorial.html">This Tutorial</a></li>
+    <li><a href="https://facebook.github.io/react/tips/communicate-between-components.html">Passing data from parent/child</a></li>
+    <li><a href="https://facebook.github.io/react/docs/forms.html#controlled-components">Form "Controlled components" - about</a></li>
+</ul>
+<script type="text/babel">
+
+    var Comment = React.createClass({
+        render: function() {
+            return (
+                    <div className="comment">
+                    <h2 className="commentAuthor">
+                    {this.props.author}
+            </h2>
+            {/*
+             Children refer to the "meat" between the Comment tags, which is the text
+             */}
+            {this.props.children}
+            </div>
+            );
+        }
+    });
+
+    var CommentList = React.createClass({
+        render: function() {
+            var commentNodes = this.props.comments.map(function(comment) {
+                return (
+                        <Comment author={comment.author} key={comment.id}>
+                {comment.text}
+                </Comment>
+                );
+            });
+            return (
+                    <div className="commentList">
+                    {commentNodes}
+                    </div>
+            );
+        }
+    });
+    var CommentForm = React.createClass({
+        getInitialState: function() {
+            // React view needs to remain in sync with DOM (input elements), so add
+            // this properties and onChange handlers to update from DOM->react view
+            return {author: '', text: ''};
+        },
+        handleAuthorChange: function(e) {
+            this.setState({author: e.target.value});
+        },
+        handleTextChange: function(e) {
+            this.setState({text: e.target.value});
+        },
+        handleSubmit: function(e) {
+            e.preventDefault();
+            var author = this.state.author.trim();
+            var text = this.state.text.trim();
+            if (!text || !author) {
+                return;
+            }
+            // TODO: send request to the server
+            // Explicit callback to parent, since it is managing ("owning") the state of the comment list
+            this.props.onCommentSubmit({author: author, text: text});
+            this.setState({author: '', text: ''});
+        },
+        render: function() {
+            return (
+                    <form className="commentForm" onSubmit={this.handleSubmit}>
+                    <input type="text"
+                            placeholder="Your name"
+                            value={this.state.author}
+                            onChange={this.handleAuthorChange} />
+                    <input type="text"
+                            placeholder="Say something..."
+                            value={this.state.text}
+                            onChange={this.handleTextChange}
+                            />
+                    <input type="submit" value="Post" />
+                    </form>
+            );
+        }
+    });
+    var CommentBox = React.createClass({
+        getInitialState: function() {
+            return {existingComments: []};
+        },
+        handleCommentSubmit: function(comment) {
+            var optimizeWithPreloading = true;
+
+            // BXM: I have left out the peice for "optimizeWithPreloading"===true where
+            // we pass an error function to the save method which will revert comments
+            // to their previous state using:
+            // this.setState({data: comments});
+
+            if(optimizeWithPreloading) {
+                // Optimistically set an id on the new comment. It will be replaced by an
+                // id generated by the server. In a production application you would likely
+                // not use Date.now() for this and would have a more robust system in place.
+                var comments = this.state.existingComments; // saved in case we need to rollback on error
+
+                comment.id = Date.now();
+                var newComments = comments.concat([comment]);
+                this.setState({existingComments: newComments});
+            }
+
+            alert("This is where we would send data to server...it's commented out...thus the polling from server will thus erase your new comment");
+            /*
+            console.log("CommentBox.handleCommentSubmit: Saving comments");
+            var onSuccessCallback = function(resultData) {
+                console.log("Result: " + JSON.stringify(resultData));
+
+                this.setState({
+                    existingComments: resultData
+                });
+            }.bind(this);
+
+            saveDataOnServer(comment, this.props.url, onSuccessCallback);
+            */
+        },
+        loadCommentsFromServer: function() {
+            console.log("CommentBox.loadCommentsFromServer: Fetching comments");
+            var onSuccessCallback = function(retrievedData) {
+                console.log("Retrieved: " + JSON.stringify(retrievedData));
+
+                this.setState({
+                    existingComments: retrievedData
+                });
+            }.bind(this);
+
+            loadServerData(this.props.url, onSuccessCallback);
+        },
+        componentDidMount: function() {
+            this.loadCommentsFromServer();
+            setInterval(this.loadCommentsFromServer, this.props.pollInterval);
+        },
+        render: function() {
+            return (
+                    <div className="commentBox">
+                    <h1>Comments</h1>
+                    <CommentList comments={this.state.existingComments} />
+                    <CommentForm onCommentSubmit={this.handleCommentSubmit} />
+                    </div>
+            );
+        }
+    });
+    ReactDOM.render(
+    <CommentBox url="comments.json" pollInterval={10000} />,
+            document.getElementById('content')
+    );
+</script>
+</body>
+</html>
