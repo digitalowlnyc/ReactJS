@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Example - React Simple Table</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.7/react.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.7/react-dom.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/0.3.5/marked.min.js"></script>
+    <script src="data-retrieve-helpers.js"></script>
+</head>
+<body>
+<h1>Blue Nest Table: An editable table in React</h1>
+<h2>Notes:</h2>
+<ul>
+    <li>Supports a flag for turning live editting of. When it is of, escape key clears changes, enter submits</li>
+    <li></li>
+</ul>
+<div id="content"></div>
+
+<script type="text/babel">
+
+    // Credit: http://stackoverflow.com/a/27255103/968312
+    var ContentEditable = React.createClass({
+        getDefaultProps: function() {
+            return {
+                liveEditting: false, // whether we use certain keys for submitting/canceling
+                submitKey: 13, // enter
+                escapeKey: 27, // escape
+            };
+        },
+        getInitialState: function() {
+            console.log("Creating ContentEditable")
+
+            return {
+            };
+        },
+        render: function(){
+            console.log("Rending ContentEditable")
+            return <div tabIndex="1" id="contenteditable"
+            onInput={this.emitChange}
+            onBlur={this.emitChange}
+            onFocus={this.onFocus}
+            onKeyDown={this.onKeyPress}
+            contentEditable
+            dangerouslySetInnerHTML={{__html: this.props.html}}></div>;
+        },
+        shouldComponentUpdate: function(nextProps){
+            return nextProps.html !== ReactDOM.findDOMNode(this).innerHTML;
+        },
+        componentDidUpdate: function() {
+            if ( this.props.html !== ReactDOM.findDOMNode(this).innerHTML ) {
+                ReactDOM.findDOMNode(this).innerHTML = this.props.html;
+            }
+        },
+        onFocus: function(event) {
+            console.log("Focusing");
+            if(!("contentBeforeEditting" in this)) {
+                this.contentBeforeEditting = "";
+            }
+            console.log("Content saved before editting: " + this.contentBeforeEditting);
+
+            this.contentBeforeEditting = this.props.html;
+        },
+        onKeyPress: function(event) {
+            console.log("Key pressed: " + event.keyCode);
+            var node = ReactDOM.findDOMNode(this);
+
+            if(event.keyCode == this.props.escapeKey) {
+                if(this.props.liveEditting != true) {
+                    node.innerHTML = this.contentBeforeEditting;
+                    this.doChange();
+                }
+                node.blur();
+            } else if(event.keyCode == this.props.submitKey) {
+                console.log("Submitted");
+                node.blur();
+                event.preventDefault();
+                // You need readonly otherwise cursor remains shown
+                node.setAttribute("readonly", "readonly");
+                return false;
+            }
+        },
+        doChange: function(force) {
+            // By now, anyone that wanted to update the innerHTML should have
+            // done so.
+            if(typeof force === "undefined")
+                 force = false;
+
+            var node = ReactDOM.findDOMNode(this);
+            var html = node.innerHTML
+            var row = this.props.row;
+            var col = this.props.col;
+            if (force || (this.props.onChange && html !== this.lastHtml)) {
+                this.props.onChange({
+                    target: {
+                        value: html,
+                        row: row,
+                        col: col,
+                    }
+                });
+                this.lastHtml = html;
+
+                return true;
+            }
+
+            return false; // no change
+        },
+        emitChange: function(){
+            console.log("on input");
+
+            this.doChange();
+        }
+    });
+
+    var BlueNestTableHeader = React.createClass({
+        getInitialState: function() {
+            return({});
+        },
+        render: function() {
+            var key = 0;
+            var headerCells = mapObject(this.props.headerRow, function(col,val) {
+                key += 1;
+                return (
+                        <th key={key}>{col}</th>
+                );
+            });
+
+            return (
+                    <tr className="blueNestTableHeader">
+                    {headerCells}
+                    </tr>
+            );
+        }
+    });
+
+    var BlueNestTableRow = React.createClass({
+        getInitialState: function() {
+            return {
+                rowData: this.props.rowData,
+            };
+        },
+        shouldComponentUpdate: function(nextProps, nextState) {
+            return true;
+        },
+        handleChange: function(event) {
+            var target = event.target;
+            console.log(target);
+            //TODO: See if this cloning is required
+            var tempRowData = JSON.parse(JSON.stringify(this.state.rowData));
+
+            tempRowData[target.col] = target.value;
+            console.log("New state");
+            console.log(tempRowData);
+
+            this.setState({
+                rowData: tempRowData
+            });
+        },
+        render: function() {
+            console.log("Row rendering");
+
+            var self = this;
+            var key = -1;
+
+            var rowData = this.state.rowData;
+            console.log("Rendering with rowData:");
+            console.log(rowData);
+
+            if(typeof this.props.rowData === "undefined") {
+                rowData = {};
+            }
+
+            var tableCells = mapObject(rowData, function(col,val) {
+                key += 1;
+                return (
+                        <td row={self.props.rowId} col={col} key={key}>
+                        <ContentEditable row={self.props.rowId} col={col} key={key} html={rowData[col]} onChange={self.handleChange} /></td>
+                );
+            }.bind(this));
+
+            return (
+                    <tr row={self.props.rowId} className="blueNestTableRow">
+                    {tableCells}
+                    </tr>
+            );
+        }
+    });
+
+    var BlueNestTable = React.createClass({
+        getInitialState: function() {
+            return {
+                tableData: [],
+            };
+        },
+        loadTableData: function() {
+            console.log("Loading table data");
+            var onSuccessCallback = function(retrievedData) {
+                console.log("Retrieved: " + JSON.stringify(retrievedData));
+
+                this.setState({
+                    isEditable: false,
+                    tableData: retrievedData,
+                });
+            }.bind(this);
+
+            loadData(this.props.storedDataUrl, onSuccessCallback);
+        },
+        componentDidMount: function() {
+            this.loadTableData();
+            setInterval(this.loadTableData, 30000);
+        },
+        render: function() {
+            console.log("Table rendering");
+            var self = this;
+            var idx = 0;
+            var header = null;
+            if(this.state.tableData.lengh > 0)
+                header = <BlueNestTableHeader headerRow={this.state.tableData[0]}></BlueNestTableHeader>
+
+            var rows = this.state.tableData.map(function(rowJson) {
+                idx += 1;
+                return (
+                        <BlueNestTableRow isEditable={self.props.isEditable} key={idx} rowId={idx} rowData={rowJson}></BlueNestTableRow>
+                );
+            });
+            return (
+                    <table className="blueNestTable">
+                            <tbody>
+                    {header}
+                    {rows}
+                            </tbody>
+                    </table>
+            );
+        }
+    });
+
+    ReactDOM.render(
+    <BlueNestTable storedDataUrl={"testtabledata.json"} isEditable={true}/>,
+            document.getElementById('content')
+    );
+</script>
+</body>
+</html>
